@@ -122,10 +122,10 @@ const SimpleScanner = ({ showCamera, setShowCamera, onScanResult }) => {
 
   const extractMedicineInfo = (text) => {
     const lines = text.split('\n').map(line => line.trim()).filter(line => line.length > 2);
-    let name = '';
+    let bestName = '';
     let dosage = '';
     
-    // Extract dosage
+    // Extract dosage first
     const dosageRegex = /(\d+(?:\.\d+)?)\s*(mg|mcg|g|ml|iu|units?|tablets?)/i;
     for (const line of lines) {
       const match = line.match(dosageRegex);
@@ -135,25 +135,77 @@ const SimpleScanner = ({ showCamera, setShowCamera, onScanResult }) => {
       }
     }
     
-    // Extract medicine name
-    const excludeWords = ['tablet', 'capsule', 'syrup', 'mg', 'mcg', 'use', 'take', 'daily', 'exp', 'mfg'];
+    // Common medicine patterns and exclude words
+    const excludeWords = [
+      'tablet', 'capsule', 'syrup', 'mg', 'mcg', 'use', 'take', 'daily', 'exp', 'mfg',
+      'batch', 'lot', 'date', 'pack', 'strip', 'bottle', 'box', 'label', 'pharma',
+      'ltd', 'inc', 'corp', 'company', 'manufacturing', 'manufactured', 'by'
+    ];
     
-    for (const line of lines) {
-      const cleanLine = line.replace(/[^a-zA-Z\s]/g, ' ').replace(/\s+/g, ' ').trim();
-      const words = cleanLine.split(' ').filter(w => w.length >= 3);
-      const validWords = words.filter(w => !excludeWords.includes(w.toLowerCase()));
-      
-      if (validWords.length >= 1) {
-        const candidateName = validWords.slice(0, 2).join(' ');
-        if (candidateName.length > name.length) {
-          name = candidateName.split(' ').map(word => 
-            word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
-          ).join(' ');
-        }
+    const commonMedicines = [
+      'paracetamol', 'acetaminophen', 'ibuprofen', 'aspirin', 'amoxicillin', 'metformin',
+      'lisinopril', 'atorvastatin', 'omeprazole', 'levothyroxine', 'amlodipine', 'simvastatin',
+      'losartan', 'gabapentin', 'sertraline', 'tramadol', 'albuterol', 'furosemide',
+      'vitamin d', 'vitamin c', 'vitamin b', 'calcium carbonate', 'iron sulfate', 'folic acid'
+    ];
+    
+    // First, look for known medicine names
+    const fullText = text.toLowerCase();
+    for (const medicine of commonMedicines) {
+      if (fullText.includes(medicine)) {
+        bestName = medicine.split(' ').map(word => 
+          word.charAt(0).toUpperCase() + word.slice(1)
+        ).join(' ');
+        break;
       }
     }
     
-    return { name, dosage: dosage || 'Not specified' };
+    // If no known medicine found, extract from lines
+    if (!bestName) {
+      let candidates = [];
+      
+      for (const line of lines) {
+        // Clean the line but preserve spaces
+        const cleanLine = line.replace(/[^a-zA-Z\s]/g, ' ').replace(/\s+/g, ' ').trim();
+        const words = cleanLine.split(' ').filter(w => w.length >= 3);
+        const validWords = words.filter(w => !excludeWords.includes(w.toLowerCase()));
+        
+        if (validWords.length >= 1) {
+          // Try different combinations of words
+          for (let i = 0; i < validWords.length; i++) {
+            // Single word
+            candidates.push(validWords[i]);
+            
+            // Two words
+            if (i < validWords.length - 1) {
+              candidates.push(validWords[i] + ' ' + validWords[i + 1]);
+            }
+            
+            // Three words
+            if (i < validWords.length - 2) {
+              candidates.push(validWords[i] + ' ' + validWords[i + 1] + ' ' + validWords[i + 2]);
+            }
+          }
+        }
+      }
+      
+      // Score candidates by length and position (prefer longer, earlier names)
+      candidates = candidates.filter(c => c.length >= 4);
+      if (candidates.length > 0) {
+        // Sort by length (longer first) then by alphabetical order
+        candidates.sort((a, b) => b.length - a.length || a.localeCompare(b));
+        bestName = candidates[0];
+      }
+    }
+    
+    // Format the name properly
+    if (bestName) {
+      bestName = bestName.split(' ').map(word => 
+        word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+      ).join(' ');
+    }
+    
+    return { name: bestName, dosage: dosage || 'Not specified' };
   };
 
   const fallbackToManual = (message) => {
