@@ -35,8 +35,7 @@ A modern React-based medication adherence tracking application with smart scanni
 
 - **Frontend**: React 18, CSS3
 - **OCR**: Tesseract.js, OpenCV.js
-- **Voice**: Web Speech API
-- **Video**: Agora React UIKit
+- **Voice**: Agora react UI kit
 - **Storage**: LocalStorage
 - **Styling**: Custom CSS with glassmorphism design
 
