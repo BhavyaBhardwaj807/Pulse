@@ -794,7 +794,7 @@ body {
 .chart-bars {
   display: flex;
   justify-content: space-between;
-  align-items: end;
+  align-items: flex-end;
   height: 200px;
   padding: 1rem;
   background: rgba(0, 0, 0, 0.02);
@@ -814,14 +814,22 @@ body {
   max-width: 40px;
   background: linear-gradient(to top, var(--medical-blue), var(--medical-light-blue));
   border-radius: 4px 4px 0 0;
-  min-height: 10px;
+  min-height: 15px;
   transition: all 0.3s ease;
-  animation: growBar 1s ease-out;
+  animation: growBar 1s ease-out forwards;
+  height: 15px;
 }
 
 @keyframes growBar {
-  from { height: 0; }
-  to { height: var(--height); }
+  from { 
+    height: 0;
+    transform: scaleY(0);
+    transform-origin: bottom;
+  }
+  to { 
+    transform: scaleY(1);
+    transform-origin: bottom;
+  }
 }
 
 .chart-label {

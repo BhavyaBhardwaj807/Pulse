@@ -82,7 +82,13 @@ const AdherenceReport = ({
           <div className="chart-bars">
             {adherenceHistory.map((day, i) => (
               <div key={i} className="chart-day">
-                <div className="chart-bar" style={{height: `${day.percentage}%`}}></div>
+                <div 
+                  className="chart-bar" 
+                  style={{
+                    height: `${Math.max(day.percentage * 1.5, 15)}px`,
+                    '--height': `${Math.max(day.percentage * 1.5, 15)}px`
+                  }}
+                ></div>
                 <div className="chart-label">{new Date(day.date).toLocaleDateString('en', {weekday: 'short'})}</div>
                 <div className="chart-value">{day.taken}/{day.total}</div>
               </div>
