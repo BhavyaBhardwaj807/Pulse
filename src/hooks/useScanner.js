@@ -132,10 +132,12 @@ export const useScanner = () => {
           speechSynthesis.speak(utterance);
         }
       } else {
+        setIsScanning(false);
         onError('Could not detect medicine name. Please ensure the text is clear and well-lit.');
       }
     } catch (error) {
       console.error('Scanning error:', error);
+      setIsScanning(false);
       onError(`Scanning failed: ${error.message}. Please try again or enter manually.`);
     }
   };

@@ -103,7 +103,6 @@ function App() {
   };
 
   const handleScanError = (error) => {
-    setIsScanning(false);
     const suggestions = 'Common medicines: Paracetamol, Ibuprofen, Aspirin, Vitamin D, Metformin, Lisinopril';
     const name = prompt(`${error}\n\n${suggestions}\n\nEnter medicine name manually:`);
     
