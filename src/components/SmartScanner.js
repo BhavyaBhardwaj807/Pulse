@@ -38,18 +38,25 @@ const SmartScanner = ({
         
         <div className="camera-container">
           <div className="camera-preview">
-            <video 
-              id="camera-video" 
-              autoPlay 
-              playsInline 
-              muted
-              style={{
-                width: '100%',
-                height: '100%',
-                objectFit: 'cover',
-                borderRadius: '12px'
-              }}
-            />
+            {!stream ? (
+              <div className="camera-placeholder">
+                <div className="camera-icon">📷</div>
+                <p>Initializing camera...</p>
+              </div>
+            ) : (
+              <video 
+                id="camera-video" 
+                autoPlay 
+                playsInline 
+                muted
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover',
+                  borderRadius: '12px'
+                }}
+              />
+            )}
             {isScanning && (
               <div className="scanning-overlay">
                 <div className="scan-line"></div>
