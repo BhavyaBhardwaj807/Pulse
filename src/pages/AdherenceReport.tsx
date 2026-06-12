@@ -142,11 +142,18 @@ export const AdherenceReport: React.FC = () => {
     <div className="space-y-6">
       
       {/* 1. Header and quick actions */}
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold font-sans text-white">{t.reportTitle}</h2>
-        <button 
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <h2 className="text-xl sm:text-2xl font-bold text-white">{t.reportTitle}</h2>
+          <p className="text-sm text-navy-700 mt-0.5">
+            {language === 'hi'
+              ? 'पिछले 7 दिनों का दवाई एडहेरेंस सारांश'
+              : 'A 7-day summary of your medication adherence'}
+          </p>
+        </div>
+        <button
           onClick={exportPDFReport}
-          className="flex items-center space-x-2 bg-accent hover:bg-accent-dark text-white font-bold py-2.5 px-4 rounded-2xl shadow-lg border border-accent text-sm tactile-btn"
+          className="self-start sm:self-auto flex items-center gap-2 bg-accent hover:bg-accent-dark text-white font-bold py-2.5 px-4 rounded-card shadow-lg shadow-accent/20 border border-accent text-sm tactile-btn"
         >
           <FileText size={16} />
           <span>{t.exportPdf}</span>
@@ -154,7 +161,7 @@ export const AdherenceReport: React.FC = () => {
       </div>
 
       {/* 2. Key stats metrics grids */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="card-navy flex flex-col items-center justify-center p-5 text-center relative overflow-hidden">
           <div className="absolute top-0 right-0 w-16 h-16 bg-accent/5 rounded-full blur-xl"></div>
           <span className="text-3xl font-extrabold text-accent font-sans">{adherenceRate}%</span>
@@ -168,6 +175,14 @@ export const AdherenceReport: React.FC = () => {
             <span>{streak}</span>
           </span>
           <span className="text-xs text-navy-750 font-bold uppercase tracking-wider mt-1">{t.streakText}</span>
+        </div>
+
+        <div className="card-navy flex flex-col items-center justify-center p-5 text-center relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-16 h-16 bg-success/5 rounded-full blur-xl"></div>
+          <span className="text-3xl font-extrabold text-success font-sans">{medications.length}</span>
+          <span className="text-xs text-navy-750 font-bold uppercase tracking-wider mt-1">
+            {language === 'hi' ? 'सक्रिय दवाइयाँ' : 'Active Medicines'}
+          </span>
         </div>
       </div>
 
@@ -229,7 +244,7 @@ export const AdherenceReport: React.FC = () => {
             missedDosesList.slice(0, 5).map((miss, idx) => (
               <div 
                 key={idx}
-                className="bg-navy-950 border border-navy-800/60 rounded-2xl py-3.5 px-4 flex items-center justify-between"
+                className="bg-navy-950 border border-navy-800/60 rounded-card py-3 px-4 flex items-center justify-between"
               >
                 <div className="flex items-center space-x-3 text-left">
                   <XCircle size={18} className="text-rose-500" />

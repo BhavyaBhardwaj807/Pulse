@@ -7,34 +7,46 @@ export default {
   theme: {
     extend: {
       colors: {
+        // Web design system tokens (kept as `navy.*` for backward compatibility
+        // with the existing component classNames). Values updated to match the
+        // GitHub-dark inspired palette: bg #0d1117, card #161b22, accent #00bcd4.
         navy: {
-          950: '#030712', // Deep near-black
-          900: '#0B132B', // Main deep navy
-          800: '#1C2541', // Secondary navy card
-          700: '#3A506B', // Lighter navy text
-          100: '#E2E8F0', // Soft readable light text
-          50: '#F8FAFC',
+          975: '#08090d', // extra deep for inset wells
+          950: '#0d1117', // App background
+          900: '#161b22', // Card background
+          850: '#1f242c', // Subtle separator / hover surface
+          800: '#262d36', // Border on cards
+          750: '#3a414b',
+          700: '#525a64', // Tertiary text
+          100: '#c9d1d9', // Soft secondary text
+          50:  '#f0f6fc', // Primary text (white-ish)
         },
         accent: {
-          DEFAULT: '#00B4D8', // Sleek Premium Electric Teal/Cyan
-          light: '#E0F7FA',
-          dark: '#0077B6',
+          DEFAULT: '#00bcd4', // Cyan/teal
+          light:   '#5ce1f0',
+          dark:    '#0097a7',
         },
         success: {
-          DEFAULT: '#10B981', // Emerald green for taken status
-          light: '#D1FAE5',
-        }
+          DEFAULT: '#10b981',
+          light:   '#d1fae5',
+        },
       },
       fontFamily: {
-        sans: ['"Outfit"', '"Inter"', 'sans-serif'],
+        sans: ['"Inter"', '"Outfit"', 'system-ui', 'sans-serif'],
       },
       fontSize: {
-        'elder-sm': '1rem',      // Larger than normal
-        'elder-base': '1.25rem',  // Very readable defaults
-        'elder-lg': '1.5rem',
-        'elder-xl': '1.875rem',
-        'elder-2xl': '2.25rem',
-      }
+        'elder-sm':   '1rem',
+        'elder-base': '1.125rem',
+        'elder-lg':   '1.375rem',
+        'elder-xl':   '1.75rem',
+        'elder-2xl':  '2.25rem',
+      },
+      maxWidth: {
+        '8xl': '88rem',
+      },
+      borderRadius: {
+        'card': '12px',
+      },
     },
   },
   plugins: [],

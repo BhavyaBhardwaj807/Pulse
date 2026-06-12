@@ -1,7 +1,17 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { collection, addDoc, doc, setDoc, query, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import {
+  collection,
+  addDoc,
+  doc,
+  setDoc,
+  query,
+  onSnapshot,
+  serverTimestamp,
+  deleteDoc,
+  updateDoc,
+} from 'firebase/firestore';
 import { useFirebase } from './FirebaseContext';
-import { SarvamService } from '../services/sarvamService';
+import { useActivePatient } from './RoleContext';
 
 export interface Medication {
   id: string;
@@ -19,7 +29,7 @@ export interface DoseLog {
   dosage: string;
   timeSlot: 'morning' | 'afternoon' | 'evening' | 'night';
   taken: boolean;
-  takenAt?: string; // Time string
+  takenAt?: string;
 }
 
 export interface MedDocument {
@@ -30,7 +40,7 @@ export interface MedDocument {
   doctor: string;
   hospital: string;
   medicines: string[];
-  fileUrl: string; // Base64 or local image URL to view inline!
+  fileUrl: string;
   googleDriveId?: string;
   isSynced?: boolean;
   extractedText?: string;
@@ -40,148 +50,124 @@ export interface MedDocument {
 
 interface MedicationContextType {
   medications: Medication[];
-  logs: Record<string, Record<string, DoseLog>>; // date -> "medId_slot" -> DoseLog
+  logs: Record<string, Record<string, DoseLog>>;
   documents: MedDocument[];
   addMedication: (med: Omit<Medication, 'id'>) => Promise<void>;
   deleteMedication: (id: string) => Promise<void>;
   updateMedication: (med: Medication) => Promise<void>;
-  toggleDose: (date: string, medId: string, slot: 'morning' | 'afternoon' | 'evening' | 'night') => Promise<void>;
+  toggleDose: (
+    date: string,
+    medId: string,
+    slot: 'morning' | 'afternoon' | 'evening' | 'night'
+  ) => Promise<void>;
   addDocument: (docData: Omit<MedDocument, 'id'>) => Promise<void>;
   deleteDocument: (id: string) => Promise<void>;
   streak: number;
   adherenceRate: number;
-  
 }
 
 const MedicationContext = createContext<MedicationContextType | undefined>(undefined);
 
-// Initial mock data to look stunning at first load for judges!
-/*const INITIAL_MEDICATIONS: Medication[] = [
-  {
-    id: 'med-1',
-    name: 'Aspirin (150mg)',
-    dosage: '1 Tablet',
-    frequency: 'Once Daily',
-    timing: ['morning'],
-    startDate: new Date().toISOString().split('T')[0],
-    instructions: 'After breakfast'
-  },
-  {
-    id: 'med-2',
-    name: 'Metformin (500mg)',
-    dosage: '1 Tablet',
-    frequency: 'Twice Daily',
-    timing: ['morning', 'night'],
-    startDate: new Date().toISOString().split('T')[0],
-    instructions: 'With meals'
-  },
-  {
-    id: 'med-3',
-    name: 'Multivitamin',
-    dosage: '1 Capsule',
-    frequency: 'Once Daily',
-    timing: ['afternoon'],
-    startDate: new Date().toISOString().split('T')[0],
-    instructions: 'After lunch'
-  }
-];*/
-
-/*const INITIAL_DOCUMENTS: MedDocument[] = [
-  {
-    id: 'doc-1',
-    name: 'AIIMS Cardiology Prescription',
-    type: 'prescription',
-    date: '2026-05-28',
-    doctor: 'Dr. R. K. Sharma',
-    hospital: 'AIIMS, New Delhi',
-    medicines: ['Aspirin', 'Metformin', 'Atorvastatin'],
-    fileUrl: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="600" height="800" viewBox="0 0 600 800"><rect width="600" height="800" fill="%23F8FAFC"/><rect x="40" y="40" width="520" height="720" fill="none" stroke="%230F172A" stroke-width="2"/><text x="80" y="100" font-family="Outfit, sans-serif" font-size="28" font-weight="bold" fill="%230F172A">AIIMS CARDIOLOGY DEPT</text><text x="80" y="130" font-family="sans-serif" font-size="16" fill="%23475569">Dr. R. K. Sharma | Cardiology Specialists</text><line x1="80" y1="160" x2="520" y2="160" stroke="%23CBD5E1" stroke-width="2"/><text x="80" y="200" font-family="Outfit, sans-serif" font-weight="bold" font-size="20">Rx</text><text x="80" y="240" font-family="sans-serif" font-size="18">1. Tab. Aspirin (150mg) - 1 Daily after Breakfast</text><text x="80" y="280" font-family="sans-serif" font-size="18">2. Tab. Metformin (500mg) - Twice Daily with meals</text><text x="80" y="320" font-family="sans-serif" font-size="18">3. Tab. Atorvastatin (10mg) - 1 Daily at Night</text><line x1="80" y1="700" x2="200" y2="700" stroke="%23475569" stroke-width="1"/><text x="80" y="720" font-family="sans-serif" font-size="12" fill="%23475569">Authorized Signature</text></svg>'
-  }
-];*/
-
 export const MedicationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { db, user, isFirebaseActive } = useFirebase();
-  // settings not needed here after removing JSON backup helpers
+  const { db, isFirebaseActive } = useFirebase();
+  const {
+    patientId,
+    isOwnData,
+    medicationsPath,
+    documentsPath,
+    logsPath,
+  } = useActivePatient();
+
   const [medications, setMedications] = useState<Medication[]>([]);
   const [logs, setLogs] = useState<Record<string, Record<string, DoseLog>>>({});
   const [documents, setDocuments] = useState<MedDocument[]>([]);
   const [streak, setStreak] = useState<number>(0);
   const [adherenceRate, setAdherenceRate] = useState<number>(100);
 
-  // Load Initial Data
+  // Load — when Firestore is active, subscribe live to the *active* patient's
+  // subtree. When viewing your own data, mirror to localStorage so the UI is
+  // resilient if the user reloads offline. When viewing another patient's data
+  // (caregiver mode), never write to localStorage.
   useEffect(() => {
-    if (isFirebaseActive && db && user) {
-      // Connect to Firestore collections
-      const medQuery = query(collection(db, `users/${user.uid}/medications`));
-      const unsubscribeMeds = onSnapshot(medQuery, (snapshot) => {
-        const meds: Medication[] = [];
-        snapshot.forEach((doc) => {
-          meds.push({ id: doc.id, ...doc.data() } as Medication);
-        });
-        
-        // If Firestore is empty, initialize with beautiful defaults
-        if (meds.length === 0) {
-          setMedications([]);
-        }
-      });
+    if (isFirebaseActive && db && medicationsPath && documentsPath && logsPath) {
+      const unsubMeds = onSnapshot(
+        query(collection(db, medicationsPath)),
+        (snapshot) => {
+          const meds: Medication[] = [];
+          snapshot.forEach((d) => meds.push({ id: d.id, ...d.data() } as Medication));
+          setMedications(meds);
+          if (isOwnData) {
+            try {
+              localStorage.setItem('pulse_medications', JSON.stringify(meds));
+            } catch {}
+          }
+        },
+        (err) => console.warn('meds snapshot error', err)
+      );
 
-      const docsQuery = query(collection(db, `users/${user.uid}/documents`));
-      const unsubscribeDocs = onSnapshot(docsQuery, (snapshot) => {
-        const docsList: MedDocument[] = [];
-        snapshot.forEach((doc) => {
-          docsList.push({ id: doc.id, ...doc.data() } as MedDocument);
-        });
-        setDocuments(docsList);
-      });
+      const unsubDocs = onSnapshot(
+        query(collection(db, documentsPath)),
+        (snapshot) => {
+          const docsList: MedDocument[] = [];
+          snapshot.forEach((d) => docsList.push({ id: d.id, ...d.data() } as MedDocument));
+          setDocuments(docsList);
+          if (isOwnData) {
+            try {
+              localStorage.setItem('pulse_documents', JSON.stringify(docsList));
+            } catch {}
+          }
+        },
+        (err) => console.warn('docs snapshot error', err)
+      );
 
-      const logsQuery = query(collection(db, `users/${user.uid}/logs`));
-      const unsubscribeLogs = onSnapshot(logsQuery, (snapshot) => {
-        const fetchedLogs: Record<string, Record<string, DoseLog>> = {};
-        snapshot.forEach((doc) => {
-          const date = doc.id;
-          fetchedLogs[date] = doc.data() as Record<string, DoseLog>;
-        });
-        setLogs(fetchedLogs);
-      });
+      const unsubLogs = onSnapshot(
+        query(collection(db, logsPath)),
+        (snapshot) => {
+          const fetchedLogs: Record<string, Record<string, DoseLog>> = {};
+          snapshot.forEach((d) => {
+            fetchedLogs[d.id] = d.data() as Record<string, DoseLog>;
+          });
+          setLogs(fetchedLogs);
+          if (isOwnData) {
+            try {
+              localStorage.setItem('pulse_logs', JSON.stringify(fetchedLogs));
+            } catch {}
+          }
+        },
+        (err) => console.warn('logs snapshot error', err)
+      );
 
       return () => {
-        unsubscribeMeds();
-        unsubscribeDocs();
-        unsubscribeLogs();
+        unsubMeds();
+        unsubDocs();
+        unsubLogs();
       };
     } else {
-      // Fallback local storage
-      const localMeds = localStorage.getItem('pulse_medications');
-      if (localMeds) {
-        setMedications(JSON.parse(localMeds));
-      } else {
+      // No Firebase yet (logged out, or transient state). Use last-known
+      // local snapshot to keep the UI populated.
+      try {
+        const localMeds = localStorage.getItem('pulse_medications');
+        setMedications(localMeds ? JSON.parse(localMeds) : []);
+      } catch {
         setMedications([]);
-        localStorage.setItem('pulse_medications', JSON.stringify([]));
       }
-
-      /*const localDocs = localStorage.getItem('pulse_documents');
-      if (localDocs) {
-        setDocuments(JSON.parse(localDocs));
-      } else {
-        setDocuments(INITIAL_DOCUMENTS);
-        localStorage.setItem('pulse_documents', JSON.stringify(INITIAL_DOCUMENTS));
-      }*/
-
-      const localLogs = localStorage.getItem('pulse_logs');
-      if (localLogs) {
-        setLogs(JSON.parse(localLogs));
-      } else {
-        setLogs({})
+      try {
+        const localDocs = localStorage.getItem('pulse_documents');
+        setDocuments(localDocs ? JSON.parse(localDocs) : []);
+      } catch {
+        setDocuments([]);
+      }
+      try {
+        const localLogs = localStorage.getItem('pulse_logs');
+        setLogs(localLogs ? JSON.parse(localLogs) : {});
+      } catch {
+        setLogs({});
       }
     }
-  }, [isFirebaseActive, db, user]);
+  }, [isFirebaseActive, db, medicationsPath, documentsPath, logsPath, isOwnData, patientId]);
 
-  // Recalculate Streak & Adherence on state changes
+  // Adherence + streak recompute on data change
   useEffect(() => {
-    calculateAdherenceAndStreaks();
-  }, [medications, logs]);
-
-  const calculateAdherenceAndStreaks = () => {
     if (medications.length === 0) {
       setAdherenceRate(100);
       setStreak(0);
@@ -191,255 +177,218 @@ export const MedicationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const today = new Date();
     let computedStreak = 0;
 
-    // 1. Calculate Streak
-    // Count backward from today (or yesterday) to see how many consecutive days all scheduled doses were taken
     for (let i = 0; i < 30; i++) {
       const date = new Date(today);
       date.setDate(today.getDate() - i);
       const dateStr = date.toISOString().split('T')[0];
       const dayLog = logs[dateStr] || {};
-
-      // Find medications scheduled for this day
-      // (For this mock calculation, we assume all meds are scheduled daily)
-      let activeMedsScheduled = medications.filter(m => m.startDate <= dateStr);
-      if (activeMedsScheduled.length === 0) continue;
+      const activeMeds = medications.filter((m) => m.startDate <= dateStr);
+      if (activeMeds.length === 0) continue;
 
       let totalDosesForDay = 0;
       let takenDosesForDay = 0;
-
-      activeMedsScheduled.forEach(m => {
-        m.timing.forEach(slot => {
+      activeMeds.forEach((m) => {
+        m.timing.forEach((slot) => {
           totalDosesForDay++;
-          if (dayLog[`${m.id}_${slot}`]?.taken) {
-            takenDosesForDay++;
-          }
+          if (dayLog[`${m.id}_${slot}`]?.taken) takenDosesForDay++;
         });
       });
 
       if (totalDosesForDay > 0) {
         if (takenDosesForDay === totalDosesForDay) {
           computedStreak++;
-        } else {
-          // If today has some scheduled doses remaining, don't break streak if they are taken so far.
-          // Otherwise, break streak if any previous day was missed.
-          if (i > 0) {
-            break;
-          }
+        } else if (i > 0) {
+          break;
         }
       }
     }
-
     setStreak(computedStreak);
 
-    // 2. Calculate Adherence Rate over past 7 days
-    let totalDoses7Days = 0;
-    let takenDoses7Days = 0;
-
+    let total7 = 0;
+    let taken7 = 0;
     for (let i = 0; i < 7; i++) {
       const date = new Date(today);
       date.setDate(today.getDate() - i);
       const dateStr = date.toISOString().split('T')[0];
       const dayLog = logs[dateStr] || {};
-
-      const activeMeds = medications.filter(m => m.startDate <= dateStr);
-
-      activeMeds.forEach(m => {
-        m.timing.forEach(slot => {
-          totalDoses7Days++;
-          if (dayLog[`${m.id}_${slot}`]?.taken) {
-            takenDoses7Days++;
-          }
+      const activeMeds = medications.filter((m) => m.startDate <= dateStr);
+      activeMeds.forEach((m) => {
+        m.timing.forEach((slot) => {
+          total7++;
+          if (dayLog[`${m.id}_${slot}`]?.taken) taken7++;
         });
       });
     }
+    setAdherenceRate(total7 > 0 ? Math.round((taken7 / total7) * 100) : 100);
+  }, [medications, logs]);
 
-    const rate = totalDoses7Days > 0 ? Math.round((takenDoses7Days / totalDoses7Days) * 100) : 100;
-    setAdherenceRate(rate);
-  };
+  // ========== Mutations ==========
+  // Caregivers viewing another patient cannot write — guard at the call site.
+  const canWrite = isFirebaseActive && !!db && !!medicationsPath && isOwnData;
 
   const addMedication = async (med: Omit<Medication, 'id'>) => {
-    if (isFirebaseActive && db && user) {
-      await addDoc(collection(db, `users/${user.uid}/medications`), med);
-    } else {
+    if (canWrite) {
+      await addDoc(collection(db, medicationsPath as string), med);
+    } else if (!isFirebaseActive) {
       const newMed: Medication = {
         id: 'med_' + Math.random().toString(36).substr(2, 9),
-        ...med
+        ...med,
       };
       const updated = [...medications, newMed];
       setMedications(updated);
-      localStorage.setItem('pulse_medications', JSON.stringify(updated));
+      try {
+        localStorage.setItem('pulse_medications', JSON.stringify(updated));
+      } catch {}
+    } else {
+      console.warn('addMedication blocked — caregiver cannot add for another patient');
     }
   };
 
   const deleteMedication = async (id: string) => {
-    if (isFirebaseActive && db && user) {
-      // Logic for Firebase Delete
-    } else {
-      const updated = medications.filter(m => m.id !== id);
+    if (canWrite) {
+      try {
+        await deleteDoc(doc(db, `${medicationsPath}/${id}`));
+      } catch (err) {
+        console.error('deleteMedication failed', err);
+      }
+    } else if (!isFirebaseActive) {
+      const updated = medications.filter((m) => m.id !== id);
       setMedications(updated);
-      localStorage.setItem('pulse_medications', JSON.stringify(updated));
+      try {
+        localStorage.setItem('pulse_medications', JSON.stringify(updated));
+      } catch {}
+    } else {
+      console.warn('deleteMedication blocked — caregiver cannot modify another patient');
     }
   };
 
   const updateMedication = async (med: Medication) => {
-    if (isFirebaseActive && db && user) {
-      // Firebase update
-    } else {
-      const updated = medications.map(m => m.id === med.id ? med : m);
+    if (canWrite) {
+      try {
+        const { id, ...rest } = med;
+        await updateDoc(doc(db, `${medicationsPath}/${id}`), rest as any);
+      } catch (err) {
+        console.error('updateMedication failed', err);
+      }
+    } else if (!isFirebaseActive) {
+      const updated = medications.map((m) => (m.id === med.id ? med : m));
       setMedications(updated);
-      localStorage.setItem('pulse_medications', JSON.stringify(updated));
+      try {
+        localStorage.setItem('pulse_medications', JSON.stringify(updated));
+      } catch {}
     }
   };
 
-  const toggleDose = async (date: string, medId: string, slot: 'morning' | 'afternoon' | 'evening' | 'night') => {
+  const toggleDose = async (
+    date: string,
+    medId: string,
+    slot: 'morning' | 'afternoon' | 'evening' | 'night'
+  ) => {
     const today = new Date();
-    const timeStr = today.toTimeString().split(' ')[0].substr(0, 5); // HH:MM
-
-    const med = medications.find(m => m.id === medId);
+    const timeStr = today.toTimeString().split(' ')[0].substr(0, 5);
+    const med = medications.find((m) => m.id === medId);
     const medName = med ? med.name : 'Unknown Medicine';
     const dosage = med ? med.dosage : '1 dose';
 
-    if (isFirebaseActive && db && user) {
-      const currentLogRef = doc(db, `users/${user.uid}/logs`, date);
-      const dayLog = logs[date] || {};
-      const key = `${medId}_${slot}`;
-      const isCurrentlyTaken = !!dayLog[key]?.taken;
+    const dayLog = logs[date] || {};
+    const key = `${medId}_${slot}`;
+    const isCurrentlyTaken = !!dayLog[key]?.taken;
+    const newLogVal: DoseLog = {
+      medId,
+      medName,
+      dosage,
+      timeSlot: slot,
+      taken: !isCurrentlyTaken,
+      takenAt: !isCurrentlyTaken ? timeStr : undefined,
+    };
+    const updatedDayLog = { ...dayLog, [key]: newLogVal };
 
-      const newLogVal: DoseLog = {
-        medId,
-        medName,
-        dosage,
-        timeSlot: slot,
-        taken: !isCurrentlyTaken,
-        takenAt: !isCurrentlyTaken ? timeStr : undefined
-      };
-
-      const updatedDayLog = { ...dayLog, [key]: newLogVal };
-      await setDoc(currentLogRef, updatedDayLog);
-    } else {
-      const dayLog = logs[date] || {};
-      const key = `${medId}_${slot}`;
-      const isCurrentlyTaken = !!dayLog[key]?.taken;
-
-      const newLogVal: DoseLog = {
-        medId,
-        medName,
-        dosage,
-        timeSlot: slot,
-        taken: !isCurrentlyTaken,
-        takenAt: !isCurrentlyTaken ? timeStr : undefined
-      };
-
-      const updatedLogs = {
-        ...logs,
-        [date]: {
-          ...dayLog,
-          [key]: newLogVal
-        }
-      };
-
+    if (canWrite) {
+      try {
+        await setDoc(doc(db, `${logsPath}/${date}`), updatedDayLog);
+      } catch (err) {
+        console.error('toggleDose Firestore write failed', err);
+      }
+    } else if (!isFirebaseActive) {
+      const updatedLogs = { ...logs, [date]: updatedDayLog };
       setLogs(updatedLogs);
-      localStorage.setItem('pulse_logs', JSON.stringify(updatedLogs));
+      try {
+        localStorage.setItem('pulse_logs', JSON.stringify(updatedLogs));
+      } catch {}
+    } else {
+      console.warn('toggleDose blocked — caregiver cannot modify another patient');
     }
   };
-  
-  const addDocument = async (docData: Omit<MedDocument, 'id'>) => {
-  if (isFirebaseActive && db && user) {
-    console.log('addDocument called (firebase)');
-    console.log('isFirebaseActive =', isFirebaseActive);
-    console.log('db =', db);
-    console.log('user =', user?.uid);
 
-    try {
-      const ref = await addDoc(
-        collection(db, `users/${user.uid}/documents`),
-        {
+  const addDocument = async (docData: Omit<MedDocument, 'id'>) => {
+    if (canWrite) {
+      try {
+        const ref = await addDoc(collection(db, documentsPath as string), {
           ...docData,
           uploadedAt: serverTimestamp(),
-        }
-      );
-
-      console.log('Firestore doc created:', ref.id);
-
-      await setDoc(
-        doc(db, `users/${user.uid}/documents`, ref.id),
-        {
-          extractedText: docData.extractedText || '',
-          documentType: docData.type,
-          processedAt: serverTimestamp(),
-        },
-        { merge: true }
-      );
-
-      console.log(
-        'Saved extractedText length:',
-        docData.extractedText?.length || 0
-      );
-    } catch (err) {
-      console.error('Error saving document to Firestore:', err);
+        });
+        await setDoc(
+          doc(db, `${documentsPath}/${ref.id}`),
+          {
+            extractedText: docData.extractedText || '',
+            documentType: docData.type,
+            processedAt: serverTimestamp(),
+          },
+          { merge: true }
+        );
+      } catch (err) {
+        console.error('addDocument failed', err);
+      }
+    } else if (!isFirebaseActive) {
+      const newDoc: MedDocument = {
+        id: 'doc_' + Math.random().toString(36).substr(2, 9),
+        ...docData,
+        extractedText: docData.extractedText || '',
+        uploadedAt: new Date().toISOString(),
+        processedAt: new Date().toISOString(),
+      };
+      const updated = [newDoc, ...documents];
+      setDocuments(updated);
+      try {
+        localStorage.setItem('pulse_documents', JSON.stringify(updated));
+      } catch {}
+    } else {
+      console.warn('addDocument blocked — caregiver cannot upload for another patient');
     }
-
-  } else {
-    console.log('addDocument called (local)');
-
-    const newDoc: MedDocument = {
-      id: 'doc_' + Math.random().toString(36).substr(2, 9),
-      ...docData,
-      extractedText: docData.extractedText || '',
-      uploadedAt: new Date().toISOString(),
-      processedAt: new Date().toISOString(),
-    };
-
-    const updated = [newDoc, ...documents];
-    setDocuments(updated);
-    localStorage.setItem(
-      'pulse_documents',
-      JSON.stringify(updated)
-    );
-  }
-};
+  };
 
   const deleteDocument = async (id: string) => {
-    if (isFirebaseActive && db && user) {
+    if (canWrite) {
       try {
-        const { deleteDoc, doc } = await import('firebase/firestore');
-
-        await deleteDoc(
-          doc(db, `users/${user.uid}/documents/${id}`)
-      );
-
-      console.log("DOCUMENT DELETED:", id);
-    } catch (err) {
-      console.error("DELETE FAILED:", err);
+        await deleteDoc(doc(db, `${documentsPath}/${id}`));
+      } catch (err) {
+        console.error('deleteDocument failed', err);
+      }
+    } else if (!isFirebaseActive) {
+      const updated = documents.filter((d) => d.id !== id);
+      setDocuments(updated);
+      try {
+        localStorage.setItem('pulse_documents', JSON.stringify(updated));
+      } catch {}
     }
-  } else {
-    const updated = documents.filter(d => d.id !== id);
-
-    setDocuments(updated);
-
-    localStorage.setItem(
-      'pulse_documents',
-      JSON.stringify(updated)
-    );
-  }
-};
-  
+  };
 
   return (
-    <MedicationContext.Provider value={{
-      medications,
-      logs,
-      documents,
-      addMedication,
-      deleteMedication,
-      updateMedication,
-      toggleDose,
-      addDocument,
-      deleteDocument,
-      streak,
-      adherenceRate,
-      
-    }}>
+    <MedicationContext.Provider
+      value={{
+        medications,
+        logs,
+        documents,
+        addMedication,
+        deleteMedication,
+        updateMedication,
+        toggleDose,
+        addDocument,
+        deleteDocument,
+        streak,
+        adherenceRate,
+      }}
+    >
       {children}
     </MedicationContext.Provider>
   );

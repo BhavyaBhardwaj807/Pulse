@@ -199,6 +199,42 @@ console.log("CONTENT:", content);
     });
   }
 
+  /**
+   * General-purpose health & medication chat (used by the Pulse Assistant).
+   * Falls back to a clinically-cautious local response when the API call fails,
+   * so the UI always renders a useful answer in demo mode.
+   */
+  public static async chatSaaras(question: string, languageCode: LanguageCode = 'hi'): Promise<string> {
+    try {
+      const reply = await SarvamChatService.askWithContext({
+        context:
+          'You are PULSE, a friendly multilingual caregiver assistant for elderly patients in India. ' +
+          'Provide clear, simple, and clinically-cautious guidance on medication adherence, dosage timing, ' +
+          'side effects, and general health questions. Always remind the user to consult their doctor ' +
+          'for serious concerns.',
+        question,
+        languageCode: this.mapLanguageCode(languageCode),
+      });
+      if (reply && reply.trim()) return reply;
+    } catch (err) {
+      console.warn('chatSaaras: falling back to local response.', err);
+    }
+
+    // Local fallbacks per language
+    const fallback: Record<LanguageCode, string> = {
+      hi: 'मैं आपकी दवाइयों और स्वास्थ्य के बारे में मदद कर सकता हूँ। कृपया अधिक विशिष्ट प्रश्न पूछें या अपने डॉक्टर से सलाह लें।',
+      ta: 'உங்கள் மருந்துகள் மற்றும் ஆரோக்கியம் குறித்து உதவ முடியும். மேலும் தெளிவான கேள்வி கேளுங்கள் அல்லது உங்கள் மருத்துவரை அணுகவும்.',
+      gu: 'હું તમારી દવાઓ અને આરોગ્ય વિશે મદદ કરી શકું છું. કૃપા કરીને વધુ સ્પષ્ટ પ્રશ્ન પૂછો અથવા તમારા ડૉક્ટરનો સંપર્ક કરો.',
+      mr: 'मी तुमच्या औषधांविषयी आणि आरोग्याविषयी मदत करू शकतो. कृपया अधिक स्पष्ट प्रश्न विचारा किंवा डॉक्टरांचा सल्ला घ्या.',
+      te: 'మీ మందులు మరియు ఆరోగ్యం గురించి నేను సహాయం చేయగలను. దయచేసి స్పష్టమైన ప్రశ్న అడగండి లేదా మీ వైద్యుడిని సంప్రదించండి.',
+      bn: 'আমি আপনার ওষুধ ও স্বাস্থ্য সম্পর্কে সাহায্য করতে পারি। আরও নির্দিষ্ট প্রশ্ন করুন বা আপনার ডাক্তারের সাথে পরামর্শ নিন।',
+      kn: 'ನಿಮ್ಮ ಔಷಧಿ ಮತ್ತು ಆರೋಗ್ಯ ಕುರಿತು ನಾನು ಸಹಾಯ ಮಾಡಬಲ್ಲೆ. ದಯವಿಟ್ಟು ಸ್ಪಷ್ಟ ಪ್ರಶ್ನೆ ಕೇಳಿ ಅಥವಾ ವೈದ್ಯರನ್ನು ಸಂಪರ್ಕಿಸಿ.',
+      ml: 'നിങ്ങളുടെ മരുന്നുകളെയും ആരോഗ്യത്തെയും കുറിച്ച് സഹായിക്കാൻ കഴിയും. വ്യക്തമായ ചോദ്യം ചോദിക്കുക അല്ലെങ്കിൽ ഡോക്ടറെ കാണുക.',
+      en: 'I can help with your medication and general health questions. Please ask a specific question, or consult your doctor for clinical advice.',
+    };
+    return fallback[languageCode] || fallback.en;
+  }
+
   private static mapLanguageCode(code: LanguageCode): string {
     const map: Record<LanguageCode, string> = {
       hi: 'hi-IN',

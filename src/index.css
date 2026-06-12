@@ -1,50 +1,56 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
+  html, body, #root {
+    height: 100%;
+  }
   body {
-    @apply bg-navy-950 text-navy-50 font-sans antialiased select-none;
+    @apply bg-navy-950 text-navy-50 font-sans antialiased;
     -webkit-tap-highlight-color: transparent;
   }
 }
 
-/* Accessible animations & high contrast settings */
+/* Tactile press feedback */
 .tactile-btn {
-  @apply active:scale-95 transition-all duration-200 cursor-pointer select-none outline-none;
+  @apply active:scale-[0.97] transition-all duration-200 cursor-pointer select-none outline-none;
 }
 
+/* Card primitive — 12px radius per the new web design system */
 .card-navy {
-  @apply bg-navy-900 border border-navy-800 rounded-3xl p-6 shadow-xl;
+  @apply bg-navy-900 border border-navy-800 rounded-card p-5 shadow-lg;
 }
 
 /* Pulsing voice microphone button animation */
 @keyframes voice-pulse {
-  0% {
-    box-shadow: 0 0 0 0 rgba(0, 180, 216, 0.5);
-  }
-  70% {
-    box-shadow: 0 0 0 20px rgba(0, 180, 216, 0);
-  }
-  100% {
-    box-shadow: 0 0 0 0 rgba(0, 180, 216, 0);
-  }
+  0%   { box-shadow: 0 0 0 0   rgba(0, 188, 212, 0.55); }
+  70%  { box-shadow: 0 0 0 18px rgba(0, 188, 212, 0);   }
+  100% { box-shadow: 0 0 0 0   rgba(0, 188, 212, 0);   }
+}
+.mic-active-pulse {
+  animation: voice-pulse 1.6s infinite;
 }
 
-.mic-active-pulse {
-  animation: voice-pulse 1.5s infinite;
-}
+/* Fade / slide animations (used across modals & drawers) */
+@keyframes fade-in   { from { opacity: 0;            } to { opacity: 1; } }
+@keyframes slide-up  { from { opacity: 0; transform: translateY(8px);  } to { opacity: 1; transform: translateY(0); } }
+@keyframes slide-left{ from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
+.animate-fade-in   { animation: fade-in   .25s ease-out both; }
+.animate-slide-up  { animation: slide-up  .35s ease-out both; }
+.animate-slide-left{ animation: slide-left .35s ease-out both; }
 
 /* Custom horizontal scrolling layouts for lists */
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
-}
-.no-scrollbar {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Pretty thin scroll for chat/reports */
+.thin-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+.thin-scroll::-webkit-scrollbar-track { background: transparent; }
+.thin-scroll::-webkit-scrollbar-thumb { background: #262d36; border-radius: 999px; }
+.thin-scroll::-webkit-scrollbar-thumb:hover { background: #3a414b; }
 
 /* Pulse progress circle styling */
 .progress-ring__circle {
