@@ -350,3 +350,18 @@
     transparent 12px
   );
 }
+
+/* PULSE — modified
+   SOS recording waveform: lightweight CSS-only bouncing-bar animation
+   used inside the patient SOS recording modal. We deliberately avoid a
+   real audio analyser node so the visualization is reliable across
+   browsers and respects the global reduce-motion override above. */
+@keyframes waveform-bar {
+  0%, 100% { transform: scaleY(0.35); }
+  50%      { transform: scaleY(1);    }
+}
+.waveform-bar {
+  height: 100%;
+  transform-origin: bottom center;
+  animation: waveform-bar 0.9s ease-in-out infinite;
+}

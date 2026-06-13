@@ -1,0 +1,13 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "sosEvents",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "caregiverId", "order": "ASCENDING" },
+        { "fieldPath": "timestamp", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

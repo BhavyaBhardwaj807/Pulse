@@ -1,3 +1,4 @@
+// PULSE — modified
 import React, { useState, useEffect } from 'react';
 import { useMedication } from '../context/MedicationContext';
 import type { Medication } from '../context/MedicationContext';
@@ -5,6 +6,7 @@ import { useSettings } from '../context/SettingsContext';
 import { useRole, useActivePatient } from '../context/RoleContext';
 import { CaregiverEnterCodeCard } from '../components/CaregiverEnterCodeCard';
 import { SOSButton } from '../components/SOSButton';
+import { SOSHistoryFeed } from '../components/SOSHistoryFeed';
 import { NearbyCareCard } from '../components/NearbyCareCard';
 import {
   Check,
@@ -208,6 +210,15 @@ export const Home: React.FC<HomeProps> = ({ onOpenReport, onOpenNearby }) => {
 
       {/* Caregiver — enter invite code card on their own dashboard */}
       {role === 'caregiver' && !isCaregiverViewing && <CaregiverEnterCodeCard />}
+
+      {/* PULSE — modified
+          Caregiver-only SOS history feed lives just below the invite-code
+          card so it's the first thing the caregiver sees on landing. The
+          banner at the top of Layout handles immediate alerts; this feed
+          is the chronological record. We render the section before the
+          medication stat bar because acknowledging a real-time SOS is
+          higher priority than today's adherence numbers. */}
+      {role === 'caregiver' && !isCaregiverViewing && <SOSHistoryFeed />}
 
       {/* ===== Stat bar — date + streak side by side ===== */}
       <div className="card-navy flex flex-col sm:flex-row sm:items-center divide-y sm:divide-y-0 sm:divide-x divide-navy-800">

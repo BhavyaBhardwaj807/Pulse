@@ -1,9 +1,11 @@
+// PULSE — modified
 import React, { useState } from 'react';
 import { SettingsProvider } from './context/SettingsContext';
 import { FirebaseProvider, useFirebase } from './context/FirebaseContext';
 import { MedicationProvider } from './context/MedicationContext';
 import { RoleProvider } from './context/RoleContext';
 import { AccessibilityProvider } from './context/AccessibilityContext';
+import { SOSProvider } from './context/SOSContext';
 
 import { Layout } from './components/Layout';
 import { RoleGuard } from './components/RoleGuard';
@@ -76,13 +78,18 @@ const AppContent: React.FC = () => {
   return (
     <RoleProvider>
       {/* MedicationProvider lives inside RoleProvider so useActivePatient
-          (defined in RoleContext) is available to it. */}
+          (defined in RoleContext) is available to it. SOSProvider needs
+          the authenticated user from FirebaseContext only, so it can sit
+          here next to MedicationProvider — its single Firestore listener
+          is keyed off auth state and tears down on logout automatically. */}
       <MedicationProvider>
-        <RoleGuard activeTab={activeTab} setActiveTab={setActiveTab}>
-          <Layout activeTab={activeTab} setActiveTab={setActiveTab}>
-            {renderActiveTab()}
-          </Layout>
-        </RoleGuard>
+        <SOSProvider>
+          <RoleGuard activeTab={activeTab} setActiveTab={setActiveTab}>
+            <Layout activeTab={activeTab} setActiveTab={setActiveTab}>
+              {renderActiveTab()}
+            </Layout>
+          </RoleGuard>
+        </SOSProvider>
       </MedicationProvider>
     </RoleProvider>
   );

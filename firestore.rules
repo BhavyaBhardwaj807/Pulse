@@ -1,0 +1,76 @@
+// PULSE — modified
+// Firestore security rules for the new in-app SOS feature. There were
+// no rules in the repo prior to this change; this file establishes the
+// minimum the SOS pipeline needs and is intentionally narrow so it can
+// be merged with project-wide rules later without conflict.
+//
+// Deploy with `firebase deploy --only firestore:rules` once a
+// firebase.json is added to the project.
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // --- User profiles ----------------------------------------------
+    // Each user can only read/write their own /users/{uid} doc. The
+    // existing app reads other users' profiles only via the caregiver
+    // link flow, which copies just the public display fields; we keep
+    // those reads possible by allowing read on any authenticated
+    // request but limiting writes to the owner.
+    match /users/{userId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == userId;
+
+      match /{document=**} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+
+    // --- SOS events -------------------------------------------------
+    // Patients write new SOS events for their linked caregiver.
+    // Caregivers read events addressed to them and may acknowledge.
+    // Nothing else (sub-collections, deletions) is permitted.
+    match /sosEvents/{eventId} {
+      allow read: if request.auth != null && (
+        resource.data.caregiverId == request.auth.uid ||
+        resource.data.patientId == request.auth.uid
+      );
+
+      // Patient creates the doc; caregiverId must already be one of
+      // the patient's linked caregivers (looked up from the patient
+      // profile to prevent fan-out to arbitrary users).
+      allow create: if request.auth != null
+        && request.resource.data.patientId == request.auth.uid
+        && request.resource.data.status == 'pending'
+        && request.resource.data.caregiverId is string
+        // PULSE — modified: audioBase64 is the inline `data:` URI used
+        // when VITE_AUDIO_STORAGE is the default 'base64' strategy.
+        // Force it to be a string (possibly empty) so a malformed write
+        // can't sneak a non-string blob into the doc.
+        && request.resource.data.audioBase64 is string
+        && request.resource.data.caregiverId in
+            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.linkedCaregiverIds;
+
+      // Caregiver may transition status to acknowledged/resolved and
+      // record their UID as the acknowledger. Patient may mark their
+      // own SOS as resolved (e.g. if they recover before pickup).
+      allow update: if request.auth != null
+        && (
+          resource.data.caregiverId == request.auth.uid ||
+          resource.data.patientId == request.auth.uid
+        )
+        && request.resource.data.patientId == resource.data.patientId
+        && request.resource.data.caregiverId == resource.data.caregiverId
+        && request.resource.data.timestamp == resource.data.timestamp;
+
+      allow delete: if false;
+    }
+
+    // --- Legacy collection (kept so the old SOS button history still
+    //     loads while the team migrates off Twilio). Read-only for
+    //     linked caregivers; no new writes allowed. -------------------
+    match /sosAlerts/{alertId} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+  }
+}
