@@ -1,3 +1,4 @@
+// PULSE — modified
 import React, { useState, useEffect } from 'react';
 import {
   LayoutDashboard,
@@ -22,10 +23,11 @@ import type { LanguageCode } from '../context/SettingsContext';
 import { useMedication } from '../context/MedicationContext';
 import { useFirebase } from '../context/FirebaseContext';
 import { useRole } from '../context/RoleContext';
+import { useSOS } from '../context/SOSContext';
 import { SarvamService } from '../services/sarvamService';
 import { auth } from '../firebase';
 import { PatientSwitcher } from './PatientSwitcher';
-import { CaregiverSOSBanner } from './CaregiverSOSBanner';
+import { SOSAlertBanner } from './SOSAlertBanner';
 import { AccessibilitySettings } from './AccessibilitySettings';
 
 interface LayoutProps {
@@ -50,6 +52,9 @@ export const Layout: React.FC<LayoutProps> = ({ activeTab, setActiveTab, childre
   const { addMedication } = useMedication();
   const { user } = useFirebase();
   const { role, activePatientId, activePatientName, setActivePatientId } = useRole();
+  // PULSE — modified: caregiver navigation pings off the same context
+  // the SOSAlertBanner reads from, so there's never a duplicate query.
+  const { unacknowledgedCount } = useSOS();
 
   // Drawer / dialog states
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -236,6 +241,29 @@ export const Layout: React.FC<LayoutProps> = ({ activeTab, setActiveTab, childre
 
   const userInitial = (user?.email || 'U').charAt(0).toUpperCase();
 
+  // PULSE — modified: caregiver-only red ping rendered on the
+  // dashboard nav item whenever there is an unacknowledged SOS event.
+  // Drives off `unacknowledgedCount` from SOSContext (one shared
+  // listener). aria-live polite so screen readers re-announce the
+  // count change without interrupting the user mid-action.
+  const showSOSDot = role === 'caregiver' && unacknowledgedCount > 0;
+  const renderNavIcon = (
+    Icon: React.ComponentType<{ size?: number | string; className?: string }>,
+    iconClass: string,
+    isHomeTab: boolean
+  ) => (
+    <span className="relative inline-flex shrink-0">
+      <Icon size={20} className={iconClass} />
+      {isHomeTab && showSOSDot && (
+        <span
+          aria-label="Unacknowledged SOS alerts"
+          aria-live="polite"
+          className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-red-600 border-2 border-navy-900 shadow-soft"
+        />
+      )}
+    </span>
+  );
+
   return (
     <div className="min-h-screen w-full bg-navy-950 text-navy-50 flex flex-col">
       {/* ===== TOP NAVBAR ===== */}
@@ -385,7 +413,17 @@ export const Layout: React.FC<LayoutProps> = ({ activeTab, setActiveTab, childre
       )}
 
       {/* ===== Caregiver SOS banner (self-gates by role + active alerts) ===== */}
-      <CaregiverSOSBanner />
+      <SOSAlertBanner
+        onJumpToHistory={() => {
+          setActiveTab('home');
+          // Defer until after the home tab mounts so the section anchor
+          // exists; the history feed sets id="sos-history".
+          setTimeout(() => {
+            const el = document.getElementById('sos-history');
+            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }, 100);
+        }}
+      />
 
       {/* ===== Caregiver patient switcher drawer ===== */}
       <PatientSwitcher
@@ -413,7 +451,11 @@ export const Layout: React.FC<LayoutProps> = ({ activeTab, setActiveTab, childre
                   }`}
                   style={{ minHeight: 48 }}
                 >
-                  <Icon size={20} className={active ? 'text-accent' : 'text-navy-700'} />
+                  {renderNavIcon(
+                    Icon,
+                    active ? 'text-accent' : 'text-navy-700',
+                    item.id === 'home'
+                  )}
                   <span className="flex flex-col leading-tight">
                     <span className={`text-sm ${active ? 'font-medium' : 'font-medium'}`}>{item.label}</span>
                     {item.nativeLabel && item.nativeLabel !== item.label && (
@@ -486,7 +528,11 @@ export const Layout: React.FC<LayoutProps> = ({ activeTab, setActiveTab, childre
                       }`}
                       style={{ minHeight: 48 }}
                     >
-                      <Icon size={20} className={active ? 'text-accent' : 'text-navy-700'} />
+                      {renderNavIcon(
+                        Icon,
+                        active ? 'text-accent' : 'text-navy-700',
+                        item.id === 'home'
+                      )}
                       <span className="flex flex-col leading-tight">
                         <span className="text-sm font-medium">{item.label}</span>
                         {item.nativeLabel && item.nativeLabel !== item.label && (
